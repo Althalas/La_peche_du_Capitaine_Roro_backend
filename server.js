@@ -1,6 +1,6 @@
 // =================================================================
 // Fichier : server.js
-// Description : Fichier backend complet avec les noms de tables en minuscules.
+// Description : Fichier backend complet avec le nom du schéma dans les requêtes.
 // =================================================================
 
 // --- Imports ---
@@ -28,8 +28,9 @@ app.post("/api/register", async (req, res) => {
     if (!email || !pseudo || !password)
       return res.status(400).json({ msg: "Veuillez remplir tous les champs." });
 
+    // CORRECTION : Ajout du nom du schéma
     const userExists = await pool.query(
-      "SELECT * FROM utilisateur WHERE email = $1 OR pseudo = $2",
+      'SELECT * FROM "DbJeuRoro".utilisateur WHERE email = $1 OR pseudo = $2',
       [email, pseudo]
     );
     if (userExists.rows.length > 0)
@@ -40,8 +41,9 @@ app.post("/api/register", async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    // CORRECTION : Ajout du nom du schéma
     const newUser = await pool.query(
-      "INSERT INTO utilisateur (email, pseudo, mot_de_passe_hashe) VALUES ($1, $2, $3) RETURNING id_utilisateur, pseudo, email, argent",
+      'INSERT INTO "DbJeuRoro".utilisateur (email, pseudo, mot_de_passe_hashe) VALUES ($1, $2, $3) RETURNING id_utilisateur, pseudo, email, argent',
       [email, pseudo, passwordHash]
     );
     res
@@ -59,8 +61,9 @@ app.post("/api/login", async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ msg: "Veuillez remplir tous les champs." });
 
+    // CORRECTION : Ajout du nom du schéma
     const userResult = await pool.query(
-      "SELECT * FROM utilisateur WHERE email = $1",
+      'SELECT * FROM "DbJeuRoro".utilisateur WHERE email = $1',
       [email]
     );
     if (userResult.rows.length === 0)
@@ -73,8 +76,8 @@ app.post("/api/login", async (req, res) => {
 
     const payload = { user: { id: user.id_utilisateur } };
     jwt.sign(
-      payload,
       process.env.JWT_SECRET || "mon_secret_jwt_super_secret",
+      payload,
       { expiresIn: "1h" },
       (err, token) => {
         if (err) throw err;
@@ -101,7 +104,10 @@ app.post("/api/login", async (req, res) => {
 app.post("/api/game/fish", auth, async (req, res) => {
   try {
     const userId = req.user.id;
-    const poissonsTypes = await pool.query("SELECT * FROM poisson_type");
+    // CORRECTION : Ajout du nom du schéma
+    const poissonsTypes = await pool.query(
+      'SELECT * FROM "DbJeuRoro".poisson_type'
+    );
     const chance = Math.random();
     let poissonAttrape = null;
     let cumulRarete = 0;
@@ -118,12 +124,14 @@ app.post("/api/game/fish", auth, async (req, res) => {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      // CORRECTION : Ajout du nom du schéma
       await client.query(
-        "INSERT INTO inventaire (id_utilisateur, id_poisson_type) VALUES ($1, $2)",
+        'INSERT INTO "DbJeuRoro".inventaire (id_utilisateur, id_poisson_type) VALUES ($1, $2)',
         [userId, poissonAttrape.id_poisson_type]
       );
+      // CORRECTION : Ajout du nom du schéma
       const updatedUser = await client.query(
-        "UPDATE utilisateur SET argent = argent + $1 WHERE id_utilisateur = $2 RETURNING argent",
+        'UPDATE "DbJeuRoro".utilisateur SET argent = argent + $1 WHERE id_utilisateur = $2 RETURNING argent',
         [poissonAttrape.valeur, userId]
       );
       await client.query("COMMIT");
@@ -147,8 +155,9 @@ app.post("/api/game/fish", auth, async (req, res) => {
 app.get("/api/game/inventory", auth, async (req, res) => {
   try {
     const userId = req.user.id;
+    // CORRECTION : Ajout du nom du schéma
     const inventoryData = await pool.query(
-      "SELECT pt.nom, pt.valeur, pt.emoji FROM inventaire i JOIN poisson_type pt ON i.id_poisson_type = pt.id_poisson_type WHERE i.id_utilisateur = $1 ORDER BY i.date_capture DESC",
+      'SELECT pt.nom, pt.valeur, pt.emoji FROM "DbJeuRoro".inventaire i JOIN "DbJeuRoro".poisson_type pt ON i.id_poisson_type = pt.id_poisson_type WHERE i.id_utilisateur = $1 ORDER BY i.date_capture DESC',
       [userId]
     );
     res.json(inventoryData.rows);
@@ -163,8 +172,9 @@ app.get("/api/game/inventory", auth, async (req, res) => {
 // =================================================================
 app.get("/api/store/items", auth, async (req, res) => {
   try {
+    // CORRECTION : Ajout du nom du schéma
     const items = await pool.query(
-      "SELECT * FROM equipement_type ORDER BY prix ASC"
+      'SELECT * FROM "DbJeuRoro".equipement_type ORDER BY prix ASC'
     );
     res.json(items.rows);
   } catch (err) {
@@ -179,36 +189,41 @@ app.post("/api/store/buy/:itemId", auth, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // CORRECTION : Ajout du nom du schéma
     const itemResult = await client.query(
-      "SELECT prix FROM equipement_type WHERE id_equipement_type = $1",
+      'SELECT prix FROM "DbJeuRoro".equipement_type WHERE id_equipement_type = $1',
       [itemId]
     );
     if (itemResult.rows.length === 0)
       return res.status(404).json({ msg: "Article non trouvé." });
 
     const itemPrice = itemResult.rows[0].prix;
+    // CORRECTION : Ajout du nom du schéma
     const userResult = await client.query(
-      "SELECT argent FROM utilisateur WHERE id_utilisateur = $1",
+      'SELECT argent FROM "DbJeuRoro".utilisateur WHERE id_utilisateur = $1',
       [userId]
     );
     const userMoney = userResult.rows[0].argent;
     if (userMoney < itemPrice)
       return res.status(400).json({ msg: "Vous n'avez pas assez d'argent !" });
 
+    // CORRECTION : Ajout du nom du schéma
     const ownershipCheck = await client.query(
-      "SELECT * FROM utilisateur_equipement WHERE id_utilisateur = $1 AND id_equipement_type = $2",
+      'SELECT * FROM "DbJeuRoro".utilisateur_equipement WHERE id_utilisateur = $1 AND id_equipement_type = $2',
       [userId, itemId]
     );
     if (ownershipCheck.rows.length > 0)
       return res.status(400).json({ msg: "Vous possédez déjà cet article." });
 
     const newMoney = userMoney - itemPrice;
+    // CORRECTION : Ajout du nom du schéma
     await client.query(
-      "UPDATE utilisateur SET argent = $1 WHERE id_utilisateur = $2",
+      'UPDATE "DbJeuRoro".utilisateur SET argent = $1 WHERE id_utilisateur = $2',
       [newMoney, userId]
     );
+    // CORRECTION : Ajout du nom du schéma
     await client.query(
-      "INSERT INTO utilisateur_equipement (id_utilisateur, id_equipement_type) VALUES ($1, $2)",
+      'INSERT INTO "DbJeuRoro".utilisateur_equipement (id_utilisateur, id_equipement_type) VALUES ($1, $2)',
       [userId, itemId]
     );
 
