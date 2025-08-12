@@ -1,20 +1,41 @@
 // =================================================================
 // Fichier : db.js
-// Description : Configure et exporte le pool de connexions à la base de données PostgreSQL.
-//               Centraliser la connexion ici permet de la réutiliser dans toute l'application.
+// Description : Configuration de la connexion à la base de données
+//               avec gestion du schéma et du mode SSL pour le déploiement.
 // =================================================================
 
 const { Pool } = require("pg");
 
-// La configuration du pool de connexions.
-const pool = new Pool({
-  // Pour Neon, le plus simple est d'utiliser la chaîne de connexion
-  // que vous récupérez directement depuis leur tableau de bord.
-  // Elle contient toutes les informations (user, password, host, etc.).
-  // N'oubliez pas de la mettre entre guillemets.
-  connectionString:
-    "postgresql://neondb_owner:npg_C7nTDetm3MYX@ep-hidden-bread-a29yfzkl-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
-});
+// Détermine si l'application est en mode production (déployée sur Render)
+const isProduction = process.env.NODE_ENV === "production";
 
-// Exporte l'objet pool pour qu'il puisse être utilisé par d'autres fichiers (comme server.js)
+// Configuration de la connexion
+const connectionConfig = {
+  // Utilise la chaîne de connexion de la variable d'environnement
+  connectionString: process.env.DATABASE_URL,
+
+  // Active le SSL uniquement en production. C'est une bonne pratique.
+  ssl: isProduction ? { rejectUnauthorized: false } : false,
+
+  // NOUVEAU : Spécifier le schéma à utiliser
+  // Cela résout l'erreur "relation does not exist" car vos tables sont dans le schéma "DbJeuRoro".
+  // L'application saura maintenant où chercher les tables.
+  options: `-c search_path="DbJeuRoro",public`,
+};
+
+const pool = new Pool(connectionConfig);
+
+// Log de débogage pour vérifier la configuration au démarrage
+console.log("--- Configuration de la base de données ---");
+console.log(`Mode Production: ${isProduction}`);
+if (process.env.DATABASE_URL) {
+  const urlParts = new URL(process.env.DATABASE_URL);
+  console.log(`Host: ${urlParts.hostname}`);
+  console.log(`User: ${urlParts.username}`);
+  console.log(`Database: ${urlParts.pathname.substring(1)}`);
+} else {
+  console.log("DATABASE_URL non définie.");
+}
+console.log("------------------------------------");
+
 module.exports = pool;
