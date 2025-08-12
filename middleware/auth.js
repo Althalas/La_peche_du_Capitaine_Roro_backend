@@ -20,12 +20,22 @@ module.exports = function (req, res, next) {
   // 3. Vérifier la validité du token
   try {
     const jwtSecret = process.env.JWT_SECRET;
+
+    // --- LOG DE DÉBOGAGE ---
+    console.log("Middleware 'auth': Vérification du JWT_SECRET.");
     if (!jwtSecret) {
       console.error(
-        "ERREUR: La variable d'environnement JWT_SECRET n'est pas définie !"
+        "Middleware 'auth': ERREUR - La variable d'environnement JWT_SECRET est vide ou non définie !"
       );
-      return res.status(500).send("Erreur de configuration serveur.");
+      return res
+        .status(500)
+        .send("Erreur de configuration serveur (secret manquant).");
     }
+    console.log(
+      "Middleware 'auth': JWT_SECRET trouvé. Longueur:",
+      jwtSecret.length
+    );
+    // --- FIN LOG ---
 
     const decoded = jwt.verify(actualToken, jwtSecret);
 
@@ -33,6 +43,11 @@ module.exports = function (req, res, next) {
     req.user = decoded.user;
     next(); // Passer à la prochaine étape (la route protégée)
   } catch (err) {
+    // Log de l'erreur spécifique pour un meilleur débogage
+    console.error(
+      "Middleware 'auth': Erreur lors de la vérification du token:",
+      err.message
+    );
     res.status(401).json({ msg: "Token invalide." });
   }
 };
