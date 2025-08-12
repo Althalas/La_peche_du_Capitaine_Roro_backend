@@ -8,7 +8,7 @@ const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const pool = require("./db");
+const pool = require("../db");
 const auth = require("./middleware/auth");
 
 // --- Configuration de l'application ---
