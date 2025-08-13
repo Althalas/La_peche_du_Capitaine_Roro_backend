@@ -77,28 +77,29 @@ app.get(
   }
 );
 
-// --- EMAIL & MOT DE PASSE ---
+// --- ROUTES EMAIL & MOT DE PASSE (MISES À JOUR) ---
 app.post("/api/register", async (req, res) => {
   try {
-    const { email, pseudo, password } = req.body;
-    if (!email || !pseudo || !password)
+    // CORRECTION : On ne récupère plus l'email
+    const { pseudo, password } = req.body;
+    if (!pseudo || !password)
       return res.status(400).json({ msg: "Veuillez remplir tous les champs." });
 
+    // CORRECTION : On ne vérifie que le pseudo
     const userExists = await pool.query(
-      'SELECT * FROM "DbJeuRoro".utilisateur WHERE email = $1 OR pseudo = $2',
-      [email, pseudo]
+      'SELECT * FROM "DbJeuRoro".utilisateur WHERE pseudo = $1',
+      [pseudo]
     );
     if (userExists.rows.length > 0)
-      return res
-        .status(400)
-        .json({ msg: "Un utilisateur avec cet email ou pseudo existe déjà." });
+      return res.status(400).json({ msg: "Ce pseudo est déjà utilisé." });
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
+    // CORRECTION : On insère sans l'email
     const newUser = await pool.query(
-      'INSERT INTO "DbJeuRoro".utilisateur (email, pseudo, mot_de_passe_hashe) VALUES ($1, $2, $3) RETURNING id_utilisateur, pseudo, email, argent',
-      [email, pseudo, passwordHash]
+      'INSERT INTO "DbJeuRoro".utilisateur (pseudo, mot_de_passe_hashe) VALUES ($1, $2) RETURNING id_utilisateur, pseudo, argent',
+      [pseudo, passwordHash]
     );
     res
       .status(201)
@@ -111,18 +112,27 @@ app.post("/api/register", async (req, res) => {
 
 app.post("/api/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password)
+    // CORRECTION : On se connecte avec le pseudo
+    const { pseudo, password } = req.body;
+    if (!pseudo || !password)
       return res.status(400).json({ msg: "Veuillez remplir tous les champs." });
 
+    // CORRECTION : On cherche l'utilisateur par son pseudo
     const userResult = await pool.query(
-      'SELECT * FROM "DbJeuRoro".utilisateur WHERE email = $1',
-      [email]
+      'SELECT * FROM "DbJeuRoro".utilisateur WHERE pseudo = $1',
+      [pseudo]
     );
     if (userResult.rows.length === 0)
       return res.status(400).json({ msg: "Identifiants invalides." });
 
     const user = userResult.rows[0];
+    // On vérifie que l'utilisateur a bien un mot de passe (il ne s'est pas inscrit via Twitch)
+    if (!user.mot_de_passe_hashe) {
+      return res
+        .status(400)
+        .json({ msg: "Veuillez vous connecter avec Twitch." });
+    }
+
     const isMatch = await bcrypt.compare(password, user.mot_de_passe_hashe);
     if (!isMatch)
       return res.status(400).json({ msg: "Identifiants invalides." });
@@ -139,7 +149,6 @@ app.post("/api/login", async (req, res) => {
           user: {
             id: user.id_utilisateur,
             pseudo: user.pseudo,
-            email: user.email,
             argent: user.argent,
           },
         });
