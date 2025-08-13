@@ -22,7 +22,7 @@ app.use(cors());
 app.use(express.json());
 app.use(passport.initialize());
 
-// --- CONFIGURATION DE PASSPORT.JS POUR TWITCH ---
+// --- CONFIGURATION DE PASSPORT.JS POUR TWITCH (CORRIGÉE) ---
 passport.use(
   new TwitchStrategy(
     {
@@ -30,7 +30,7 @@ passport.use(
       clientSecret: process.env.TWITCH_CLIENT_SECRET,
       callbackURL:
         "https://la-peche-du-capitaine-roro-backend.onrender.com/api/auth/twitch/callback",
-      scope: "user:read:email",
+      scope: "user:read:email", // On demande toujours l'email pour l'identification, mais on ne le stocke pas.
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -40,11 +40,13 @@ passport.use(
         );
 
         if (userResult.rows.length > 0) {
+          // L'utilisateur existe, on le renvoie.
           return done(null, userResult.rows[0]);
         } else {
+          // CORRECTION : On insère l'utilisateur SANS son email.
           const newUser = await pool.query(
-            'INSERT INTO "DbJeuRoro".utilisateur (twitch_id, pseudo, email) VALUES ($1, $2, $3) RETURNING *',
-            [profile.id, profile.display_name, profile.email]
+            'INSERT INTO "DbJeuRoro".utilisateur (twitch_id, pseudo) VALUES ($1, $2) RETURNING *',
+            [profile.id, profile.display_name]
           );
           return done(null, newUser.rows[0]);
         }
